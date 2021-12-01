@@ -2,6 +2,8 @@ EMCC = /usr/lib/emscripten/emcc
 SHELLFILE = shell.html
 EMCCFLAGS = -s WASM=1 -s NO_EXIT_RUNTIME=1 -s "EXPORTED_RUNTIME_METHODS=['ccall']" \
         --shell-file $(SHELLFILE)
+CXXFLAGS = -O0 -g3 -fsanitize=address,leak
+LDFLAGS = -fsanitize=address,leak
 
 .PHONY: all
 all: wasm native
