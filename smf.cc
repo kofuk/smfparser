@@ -326,28 +326,47 @@ std::vector<std::uint8_t> data = {
 
 #ifdef EMSCRIPTEN
 extern "C" {
-void EMSCRIPTEN_KEEPALIVE run_parser(std::uint8_t *in, std::size_t len) {
+int format;
+int track_count;
+int time_unit;
+int tempo;
+
+void EMSCRIPTEN_KEEPALIVE initialize() {
+    format = 0;
+    track_count = 0;
+    time_unit = 0;
+    tempo = 0;
+}
+
+int EMSCRIPTEN_KEEPALIVE get_format() { return format; }
+
+int EMSCRIPTEN_KEEPALIVE get_track_count() { return track_count; }
+
+int EMSCRIPTEN_KEEPALIVE get_time_unit() { return time_unit; }
+
+int EMSCRIPTEN_KEEPALIVE get_tempo() { return tempo != 0 ? tempo : 500'000; }
+
+float EMSCRIPTEN_KEEPALIVE get_tempo_bpm() {
+    return 60'000'000 / (tempo != 0 ? tempo : 500'000);
+}
+
+void EMSCRIPTEN_KEEPALIVE parse_whole_buffer(std::uint8_t *in,
+                                             std::size_t len) {
     std::vector<std::uint8_t> data(in, in + len);
     SMFReader reader(std::move(data));
 
     SMF_Header *hdr = reader.read_header();
-    std::cout << "Type:\t\t" << hdr->get_chunk_type() << '\n';
-    std::cout << "Length:\t\t" << hdr->get_data_length() << '\n';
-    std::cout << "Format:\t\t" << hdr->get_format() << '\n';
-    std::cout << "Track:\t\t" << hdr->get_n_track() << '\n';
-    std::cout << "Time Unit:\t" << hdr->get_time_unit() << '\n';
+    format = hdr->get_format();
+    track_count = hdr->get_n_track();
+    time_unit = hdr->get_time_unit();
+    delete hdr;
 
-    for (std::uint16_t i = 0; i < hdr->get_n_track(); ++i) {
-        std::cout << '\n';
-
+    for (int i = 0; i < track_count; ++i) {
         SMF_Track *trk = reader.read_track_header();
-        std::cout << "Type:\t" << trk->get_chunk_type() << '\n';
-        std::cout << "Length:\t" << trk->get_data_length() << '\n';
         SMF_EventBuffer *events = reader.create_event_reader(
             static_cast<std::size_t>(trk->get_data_length()));
         SMF_Event *ev;
         while ((ev = events->get_next()) != nullptr) {
-            std::cout << "  delta time: " << ev->delta_time << '\n';
             if (ev->smf_event_type == SMF_Event::EventType::SMF_META) {
                 SMF_MetaEvent *mev = static_cast<SMF_MetaEvent *>(ev);
                 mev->to_owned();
@@ -363,10 +382,7 @@ void EMSCRIPTEN_KEEPALIVE run_parser(std::uint8_t *in, std::size_t len) {
                     buf[0] = mev->ptr[2];
                     buf[1] = mev->ptr[1];
                     buf[2] = mev->ptr[0];
-                    int t;
-                    std::memcpy(&t, buf, 4);
-                    float tempo = 60'000'000.0 / t;
-                    std::cout << "    Tempo: " << tempo << '\n';
+                    std::memcpy(&tempo, buf, 4);
                 } else if (mev->type == 0x02) {
                     std::cout << "    Copyright: ";
                     std::cout << std::string(reinterpret_cast<char *>(mev->ptr),
@@ -397,6 +413,7 @@ void EMSCRIPTEN_KEEPALIVE run_parser(std::uint8_t *in, std::size_t len) {
                     std::cout << "    meta event: " << +mev->type << '\n';
                 }
             } else if (ev->smf_event_type == SMF_Event::EventType::SMF_MIDI) {
+                std::cout << "  delta time: " << ev->delta_time << '\n';
                 SMF_MidiEvent *mev = static_cast<SMF_MidiEvent *>(ev);
                 if (mev->type == SMF_MidiEvent::EventType::MIDI_NOTE_ON) {
                     std::cout << "    midi event: NOTE_ON\n";
@@ -407,6 +424,7 @@ void EMSCRIPTEN_KEEPALIVE run_parser(std::uint8_t *in, std::size_t len) {
                     std::cout << "    midi event: CC\n";
                 }
             } else if (ev->smf_event_type == SMF_Event::EventType::SMF_SYSEX) {
+                std::cout << "  delta time: " << ev->delta_time << '\n';
                 static_cast<SMF_MetaEvent *>(ev)->to_owned();
                 std::cout << "    exclusive\n";
             }

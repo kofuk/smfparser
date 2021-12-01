@@ -6,11 +6,28 @@
   </head>
   <body>
     <input type="file" id="f">
+
+    <ul>
+      <li>Format: <span id="format"></span></li>
+      <li>Track Count: <span id="track-count"></span></li>
+      <li>Time Unit: <span id="time-unit"></span></li>
+      <li>Tempo: <span id="tempo"></span></li>
+    </ul>
     <script>
+     const displayInfo = () => {
+         const getFormat = Module.cwrap('get_format', 'number', null);
+         const getTrackCount = Module.cwrap('get_track_count', 'number', '');
+         const getTimeUnit = Module.cwrap('get_time_unit', 'number', null, null);
+         const getTempo = Module.cwrap('get_tempo', 'number', null);
+         const getTempoBpm = Module.cwrap('get_tempo_bpm', 'number', null);
+
+         document.getElementById('format').innerText = getFormat();
+         document.getElementById('track-count').innerText = getTrackCount();
+         document.getElementById('time-unit').innerText = getTimeUnit();
+         document.getElementById('tempo').innerText = getTempo() + ' (' + getTempoBpm() + 'bpm)';
+     };
+
      var Module = {
-         print: function(text) {
-             console.log(text);
-         },
          setStatus: function(text) {
              if (text) console.log(text);
          },
@@ -19,9 +36,14 @@
              f.addEventListener('change', () => {
                  const reader = new FileReader;
                  reader.addEventListener('load', () => {
+                     const initialize = Module.cwrap('initialize', null, null);
+                     const parseWholeBuffer = Module.cwrap('parse_whole_buffer', null, ['array', 'number']);
+
+                     initialize();
                      const fileContent = reader.result;
                      const buf = new Uint8Array(fileContent);
-                     Module.ccall('run_parser', null, ['array', 'number'], [buf, fileContent.byteLength]);
+                     parseWholeBuffer(buf, fileContent.byteLength);
+                     displayInfo();
                  });
                  reader.readAsArrayBuffer(f.files[0]);
              });
